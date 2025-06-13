@@ -1,3 +1,43 @@
+from flask import Flask, request, jsonify
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+from Cryptodome.Cipher import AES
+from Cryptodome.Util.Padding import pad
+import binascii
+
+app = Flask(__name__)
+
+IV_HEX = 'afc4e290725a3bf0ac4d3ff826c43c10'
+
+def get_token():
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+    resp = requests.get("https://allinonedownloader.com/", headers=headers)
+    if resp.status_code != 200:
+        return None
+
+    soup = BeautifulSoup(resp.text, 'html.parser')
+
+    token_tag = soup.find('input', {'id': 'token'})
+    path_tag = soup.find('input', {'id': 'scc'})
+    if not token_tag or not path_tag:
+        return None
+
+    token = token_tag['value']
+    path = path_tag['value']
+    cookie = resp.headers.get('set-cookie')
+    return token, path, cookie
+
+def generate_hash(url, token):
+    key = binascii.unhexlify(token)
+    iv = binascii.unhexlify(IV_HEX)
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    padded_url = pad(url.encode(), AES.block_size, style='iso7816')
+    encrypted = cipher.encrypt(padded_url)
+    return binascii.b2a_base64(encrypted).decode().strip()
+
 @app.route("/api/download", methods=["GET"])
 def download_get():
     url = request.args.get("url")
@@ -5,10 +45,11 @@ def download_get():
         return jsonify({"error": "Parameter 'url' is required"}), 400
 
     try:
-        token, path, cookie = get_token()
-        if not token:
+        token_data = get_token()
+        if not token_data:
             return jsonify({"error": "Failed to fetch token"}), 500
 
+        token, path, cookie = token_data
         urlhash = generate_hash(url, token)
 
         data = {
@@ -49,3 +90,7 @@ def download_get():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"status": "API is live"})
