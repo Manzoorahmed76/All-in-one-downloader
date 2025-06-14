@@ -21,7 +21,6 @@ const generateHash = (url, token) => {
     iv,
     padding: CryptoJS.pad.ZeroPadding
   });
-
   return encrypted.toString();
 };
 
@@ -29,13 +28,11 @@ export default async function handler(req, res) {
   const { url } = req.query;
 
   if (!url) {
-    return res.status(400).json({ error: 'Missing ?url=' });
+    return res.status(400).json({ error: 'Missing "url" query parameter.' });
   }
 
   const conf = await getToken();
-  if (!conf) {
-    return res.status(500).json({ error: 'Failed to get token.' });
-  }
+  if (!conf) return res.status(500).json({ error: 'Failed to get token.' });
 
   const { token, path, cookie } = conf;
   const urlhash = generateHash(url, token);
@@ -57,9 +54,7 @@ export default async function handler(req, res) {
     body: formData
   });
 
-  if (!response.ok) {
-    return res.status(500).json({ error: 'Failed to download' });
-  }
+  if (!response.ok) return res.status(500).json({ error: 'Failed to fetch result.' });
 
   try {
     const data = await response.json();
@@ -68,8 +63,8 @@ export default async function handler(req, res) {
       result: {
         title: data.title,
         thumbnail: data.thumbnail,
-        downloadUrls: data.links,
-        duration: data.duration
+        duration: data.duration,
+        downloadUrls: data.links
       },
       error: null
     });
